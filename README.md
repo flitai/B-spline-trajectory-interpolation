@@ -15,10 +15,10 @@
 3.  **端点导数约束 (`start_end_derivative`)**:
     * **类型**: `std::vector<Eigen::Vector3d>`
     * **作用**: 这是一个包含**四个**三维向量的列表，用于精确定义轨迹在起点和终点的状态。它必须严格按照以下顺序提供：
-        1.  **起点速度** (v₀)
-        2.  **终点速度** (vₘ)
-        3.  **起点加速度** (a₀)
-        4.  **终点加速度** (aₘ)
+      1.  **起点速度** (v₀)
+      2.  **终点速度** (vₘ)
+      3.  **起点加速度** (a₀)
+      4.  **终点加速度** (aₘ)
 
 
 
@@ -61,12 +61,14 @@
 
 将 `non_uniform_bspline.h`, `non_uniform_bspline.cpp` 以及 `main.cpp`, `visualize.py`, `CMakeLists.txt` 五个文件放在同一个目录下。
 
+
 .
 ├── CMakeLists.txt
 ├── main.cpp
 ├── non_uniform_bspline.cpp
 ├── non_uniform_bspline.h
 └── visualize.py
+
 
 **步骤 2: 编译 C++ 程序**
 
@@ -77,6 +79,7 @@ mkdir build
 cd build
 cmake ..
 make
+```
 
 如果一切顺利，`build` 目录下会生成一个名为 `bspline_test` 的可执行文件。
 
@@ -86,6 +89,7 @@ make
 
 ```bash
 ./bspline_test
+```
 
 程序会输出 `waypoints.csv`, `control_points.csv`, 和 `trajectory.csv` 到您的项目**根目录**（上一级目录）。
 
@@ -95,6 +99,7 @@ make
 
 ```bash
 pip install pandas numpy matplotlib seaborn
+```
 
 **步骤 5: 运行 Python 脚本进行可视化**
 
@@ -102,7 +107,7 @@ pip install pandas numpy matplotlib seaborn
 
 ```bash
 python visualize.py
+```
 
 这会弹出一个包含三个图表的窗口，同时也会在项目根目录下保存一个名为 `trajectory_visualization.png` 的图像文件。
-```
 
