@@ -61,14 +61,14 @@
 
 将 `non_uniform_bspline.h`, `non_uniform_bspline.cpp` 以及 `main.cpp`, `visualize.py`, `CMakeLists.txt` 五个文件放在同一个目录下。
 
-
+```
 .
 ├── CMakeLists.txt
 ├── main.cpp
 ├── non_uniform_bspline.cpp
 ├── non_uniform_bspline.h
 └── visualize.py
-
+```
 
 **步骤 2: 编译 C++ 程序**
 
