@@ -38,13 +38,13 @@
 
 ### 代码组成
 
-- **C++ 主程序 (`main.cpp`)**: 用于调用您提供的 B 样条库，生成一个具体的轨迹案例，并将结果（航路点、控制点、采样轨迹）输出到 CSV 文件中。
+- **C++ 主程序 (`main.cpp`)**: 用于调用 B 样条库代码，生成一个具体的轨迹案例，并将结果（航路点、控制点、采样轨迹）输出到 CSV 文件中。
 
 - **Python 可视化脚本 (`visualize.py`)**: 用于读取 C++ 程序生成的 CSV 文件，并使用 Matplotlib 库绘制出与网页版风格类似的图表，包括轨迹图、速度图和加速度图。
 
-- **`CMakeLists.txt` 文件**: 方便您轻松编译和链接 C++ 程序（需要 Eigen 库）。
+- **`CMakeLists.txt` 文件**: 方便编译和链接 C++ 程序（需要 Eigen 库）。
 
-- **`B-spline trajectory interpolation v6.html`** 算法功能验证网页,可下载后在本地浏览器中运行。
+- **`B-spline trajectory interpolation v6.html`** 算法功能验证网页，可下载后在本地浏览器中运行。
 
 
 
@@ -56,7 +56,7 @@
 
 - **C++ 编译器**: 如 `g++` 或 `clang++`。
 - **CMake**: 版本 3.10 或更高。
-- **Eigen 库**: 一个用于线性代数的 C++ 模板库。您可以使用包管理器进行安装（例如 `sudo apt-get install libeigen3-dev` on Ubuntu, `brew install eigen` on macOS）。
+- **Eigen 库**: 一个用于线性代数的 C++ 模板库。可以使用包管理器进行安装（例如 `sudo apt-get install libeigen3-dev` on Ubuntu, `brew install eigen` on macOS）。
 - **Python 3**: 以及 `pandas`、`numpy`、`matplotlib` 库。
 
 **步骤 1: 设置项目结构**
@@ -74,7 +74,7 @@
 
 **步骤 2: 编译 C++ 程序**
 
-打开终端，进入您的项目目录，然后执行以下命令：
+打开终端，进入项目目录，然后执行以下命令：
 
 ```bash
 mkdir build
@@ -93,11 +93,11 @@ make
 ./bspline_test
 ```
 
-程序会输出 `waypoints.csv`, `control_points.csv`, 和 `trajectory.csv` 到您的项目**根目录**（上一级目录）。
+程序会输出 `waypoints.csv`, `control_points.csv`, 和 `trajectory.csv` 到项目**根目录**（上一级目录）。
 
 **步骤 4: 安装 Python 依赖**
 
-如果您尚未安装所需库，请在终端中运行：
+如果尚未安装所需库，请在终端中运行：
 
 ```bash
 pip install pandas numpy matplotlib seaborn
