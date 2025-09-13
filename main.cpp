@@ -43,7 +43,7 @@ int main() {
     };
 
     // Time step for the uniform B-spline parameterization
-    const double ts = 0.5;
+    const double ts = 0.5; //需根据实际速度的大致可行性进行调整
 
     // 2. Call the B-spline parameterization function to get control points
     Eigen::MatrixXd control_points_matrix;
