@@ -44,6 +44,8 @@
 
 - **`CMakeLists.txt` 文件**: 方便您轻松编译和链接 C++ 程序（需要 Eigen 库）。
 
+- **`B-spline trajectory interpolation v6.html`** 算法功能验证网页,可下载后在本地浏览器中运行。
+
 
 
 ### 如何运行
