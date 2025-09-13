@@ -21,10 +21,16 @@
 * along with Fast-Planner. If not, see <http://www.gnu.org/licenses/>.
 */
 
+/**
+* 这是移除了ROS依赖项后的版本。主要改动如下：
 
+* 移除了 #include <ros/ros.h>。
 
-#include "bspline/non_uniform_bspline.h"
-#include <ros/ros.h>
+* 将 checkRatio 函数中的 ROS_ERROR_COND(...) 替换为 使用 std::cerr 的标准错误输出流。
+*/
+
+#include "non_uniform_bspline.h" // 假设头文件在同一目录或在包含路径中
+// #include <ros/ros.h> // <-- 已移除
 
 namespace fast_planner {
 
@@ -81,6 +87,7 @@ Eigen::VectorXd NonUniformBspline::evaluateDeBoor(const double& u) {
   // determine which [ui,ui+1] lay in
   int k = p_;
   while (true) {
+    if (k >= u_.size() - 1) break; // 防止越界
     if (u_(k + 1) >= ub) break;
     ++k;
   }
@@ -89,13 +96,11 @@ Eigen::VectorXd NonUniformBspline::evaluateDeBoor(const double& u) {
   vector<Eigen::VectorXd> d;
   for (int i = 0; i <= p_; ++i) {
     d.push_back(control_points_.row(k - p_ + i));
-    // cout << d[i].transpose() << endl;
   }
 
   for (int r = 1; r <= p_; ++r) {
     for (int i = p_; i >= r; --i) {
       double alpha = (ub - u_[i + k - p_]) / (u_[i + 1 + k - r] - u_[i + k - p_]);
-      // cout << "alpha: " << alpha << endl;
       d[i] = (1 - alpha) * d[i - 1] + alpha * d[i];
     }
   }
@@ -140,18 +145,17 @@ void NonUniformBspline::setPhysicalLimits(const double& vel, const double& acc) 
 
 bool NonUniformBspline::checkFeasibility(bool show) {
   bool fea = true;
-  // SETY << "[Bspline]: total points size: " << control_points_.rows() << endl;
 
   Eigen::MatrixXd P         = control_points_;
   int             dimension = control_points_.cols();
 
-  /* check vel feasibility and insert points */
+  /* check vel feasibility */
   double max_vel = -1.0;
   for (int i = 0; i < P.rows() - 1; ++i) {
     Eigen::VectorXd vel = p_ * (P.row(i + 1) - P.row(i)) / (u_(i + p_ + 1) - u_(i + 1));
 
     if (fabs(vel(0)) > limit_vel_ + 1e-4 || fabs(vel(1)) > limit_vel_ + 1e-4 ||
-        fabs(vel(2)) > limit_vel_ + 1e-4) {
+        (dimension >= 3 && fabs(vel(2)) > limit_vel_ + 1e-4)) {
 
       if (show) cout << "[Check]: Infeasible vel " << i << " :" << vel.transpose() << endl;
       fea = false;
@@ -172,7 +176,7 @@ bool NonUniformBspline::checkFeasibility(bool show) {
         (u_(i + p_ + 1) - u_(i + 2));
 
     if (fabs(acc(0)) > limit_acc_ + 1e-4 || fabs(acc(1)) > limit_acc_ + 1e-4 ||
-        fabs(acc(2)) > limit_acc_ + 1e-4) {
+        (dimension >= 3 && fabs(acc(2)) > limit_acc_ + 1e-4)) {
 
       if (show) cout << "[Check]: Infeasible acc " << i << " :" << acc.transpose() << endl;
       fea = false;
@@ -182,8 +186,6 @@ bool NonUniformBspline::checkFeasibility(bool show) {
       }
     }
   }
-
-  double ratio = max(max_vel / limit_vel_, sqrt(fabs(max_acc) / limit_acc_));
 
   return fea;
 }
@@ -212,14 +214,18 @@ double NonUniformBspline::checkRatio() {
     }
   }
   double ratio = max(max_vel / limit_vel_, sqrt(fabs(max_acc) / limit_acc_));
-  ROS_ERROR_COND(ratio > 2.0, "max vel: %lf, max acc: %lf.", max_vel, max_acc);
-
+  
+  // <-- 已修改
+  if (ratio > 2.0) {
+    std::cerr << "[B-spline Error]: Time adjustment ratio " << ratio 
+              << " is too large. max_vel: " << max_vel 
+              << ", max_acc: " << max_acc << std::endl;
+  }
+  
   return ratio;
 }
 
 bool NonUniformBspline::reallocateTime(bool show) {
-  // SETY << "[Bspline]: total points size: " << control_points_.rows() << endl;
-  // cout << "origin knots:\n" << u_.transpose() << endl;
   bool fea = true;
 
   Eigen::MatrixXd P         = control_points_;
@@ -227,12 +233,12 @@ bool NonUniformBspline::reallocateTime(bool show) {
 
   double max_vel, max_acc;
 
-  /* check vel feasibility and insert points */
+  /* check vel feasibility and reallocate time */
   for (int i = 0; i < P.rows() - 1; ++i) {
     Eigen::VectorXd vel = p_ * (P.row(i + 1) - P.row(i)) / (u_(i + p_ + 1) - u_(i + 1));
 
     if (fabs(vel(0)) > limit_vel_ + 1e-4 || fabs(vel(1)) > limit_vel_ + 1e-4 ||
-        fabs(vel(2)) > limit_vel_ + 1e-4) {
+        (dimension >=3 && fabs(vel(2)) > limit_vel_ + 1e-4)) {
 
       fea = false;
       if (show) cout << "[Realloc]: Infeasible vel " << i << " :" << vel.transpose() << endl;
@@ -252,9 +258,6 @@ bool NonUniformBspline::reallocateTime(bool show) {
 
       for (int j = i + 2; j <= i + p_ + 1; ++j) {
         u_(j) += double(j - i - 1) * t_inc;
-        if (j <= 5 && j >= 1) {
-          // cout << "vel j: " << j << endl;
-        }
       }
 
       for (int j = i + p_ + 2; j < u_.rows(); ++j) {
@@ -272,7 +275,7 @@ bool NonUniformBspline::reallocateTime(bool show) {
         (u_(i + p_ + 1) - u_(i + 2));
 
     if (fabs(acc(0)) > limit_acc_ + 1e-4 || fabs(acc(1)) > limit_acc_ + 1e-4 ||
-        fabs(acc(2)) > limit_acc_ + 1e-4) {
+        (dimension >= 3 && fabs(acc(2)) > limit_acc_ + 1e-4)) {
 
       fea = false;
       if (show) cout << "[Realloc]: Infeasible acc " << i << " :" << acc.transpose() << endl;
@@ -284,7 +287,6 @@ bool NonUniformBspline::reallocateTime(bool show) {
 
       double ratio = sqrt(max_acc / limit_acc_) + 1e-4;
       if (ratio > limit_ratio_) ratio = limit_ratio_;
-      // cout << "ratio: " << ratio << endl;
 
       double time_ori = u_(i + p_ + 1) - u_(i + 2);
       double time_new = ratio * time_ori;
@@ -292,24 +294,16 @@ bool NonUniformBspline::reallocateTime(bool show) {
       double t_inc    = delta_t / double(p_ - 1);
 
       if (i == 1 || i == 2) {
-        // cout << "acc i: " << i << endl;
         for (int j = 2; j <= 5; ++j) {
           u_(j) += double(j - 1) * t_inc;
         }
-
         for (int j = 6; j < u_.rows(); ++j) {
           u_(j) += 4.0 * t_inc;
         }
-
       } else {
-
         for (int j = i + 3; j <= i + p_ + 1; ++j) {
           u_(j) += double(j - i - 2) * t_inc;
-          if (j <= 5 && j >= 1) {
-            // cout << "acc j: " << j << endl;
-          }
         }
-
         for (int j = i + p_ + 2; j < u_.rows(); ++j) {
           u_(j) += delta_t;
         }
@@ -336,17 +330,18 @@ void NonUniformBspline::parameterizeToBspline(const double& ts, const vector<Eig
                                               const vector<Eigen::Vector3d>& start_end_derivative,
                                               Eigen::MatrixXd&               ctrl_pts) {
   if (ts <= 0) {
-    cout << "[B-spline]:time step error." << endl;
+    cerr << "[B-spline]:time step error." << endl;
     return;
   }
 
   if (point_set.size() < 2) {
-    cout << "[B-spline]:point set have only " << point_set.size() << " points." << endl;
+    cerr << "[B-spline]:point set have only " << point_set.size() << " points." << endl;
     return;
   }
 
   if (start_end_derivative.size() != 4) {
-    cout << "[B-spline]:derivatives error." << endl;
+    cerr << "[B-spline]:derivatives error." << endl;
+    return;
   }
 
   int K = point_set.size();
@@ -366,12 +361,6 @@ void NonUniformBspline::parameterizeToBspline(const double& ts, const vector<Eig
 
   A.block(K + 2, 0, 1, 3)     = (1 / ts / ts) * arow.transpose();
   A.block(K + 3, K - 1, 1, 3) = (1 / ts / ts) * arow.transpose();
-  // cout << "A:\n" << A << endl;
-
-  // A.block(0, 0, K, K + 2) = (1 / 6.0) * A.block(0, 0, K, K + 2);
-  // A.block(K, 0, 2, K + 2) = (1 / 2.0 / ts) * A.block(K, 0, 2, K + 2);
-  // A.row(K + 4) = (1 / ts / ts) * A.row(K + 4);
-  // A.row(K + 5) = (1 / ts / ts) * A.row(K + 5);
 
   // write b
   Eigen::VectorXd bx(K + 4), by(K + 4), bz(K + 4);
@@ -397,8 +386,6 @@ void NonUniformBspline::parameterizeToBspline(const double& ts, const vector<Eig
   ctrl_pts.col(0) = px;
   ctrl_pts.col(1) = py;
   ctrl_pts.col(2) = pz;
-
-  // cout << "[B-spline]: parameterization ok." << endl;
 }
 
 double NonUniformBspline::getTimeSum() {
