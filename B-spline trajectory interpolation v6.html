@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网页版B样条轨迹生成器 (Fast-Planner)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        .waypoint-item input, .input-group input {
+            transition: all 0.2s ease-in-out;
+        }
+        .waypoint-item input:focus, .input-group input:focus {
+            transform: scale(1.02);
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+        }
+        .chart-container {
+             position: relative;
+             height: 250px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-4 lg:p-8">
+    <div class="max-w-screen-2xl mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 lg:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl lg:text-4xl font-bold text-indigo-600 dark:text-indigo-400">三阶均匀B样条轨迹生成器</h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-2">基于 Fast-Planner 思想，含完整端点导数约束</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <!-- Control Panel -->
+            <div class="lg:col-span-1 bg-gray-50 dark:bg-gray-700 p-6 rounded-xl shadow-lg">
+                <div class="space-y-6">
+                    <!-- Waypoints -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-3 border-b-2 border-indigo-500 pb-2">航路点 (W)</h3>
+                        <div id="waypointList" class="max-h-48 overflow-y-auto space-y-2 pr-2"></div>
+                        <button id="addWaypointBtn" class="mt-4 w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">添加航路点</button>
+                        <button id="randomWaypointsBtn" class="mt-2 w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">随机生成</button>
+                    </div>
+                    
+                    <!-- Parameters -->
+                    <div>
+                         <h3 class="text-lg font-semibold mb-3 border-b-2 border-yellow-500 pb-2">参数设置</h3>
+                         <div>
+                            <label for="timeStep" class="block text-sm font-medium">航路点时间跨度s (ts)</label>
+                            <input type="number" id="timeStep" value="10" step="0.1" class="mt-1 block w-full bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                    </div>
+
+                    <!-- Endpoint Derivatives -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-3 border-b-2 border-green-500 pb-2">端点导数约束</h3>
+                        <div class="space-y-4">
+                            <div class="input-group">
+                                <label class="font-medium">起点速度 (v₀)</label>
+                                <div class="grid grid-cols-2 gap-2 mt-1">
+                                    <div>
+                                        <label for="startSpeed" class="text-xs text-gray-500 dark:text-gray-400">速度大小</label>
+                                        <input type="number" id="startSpeed" value="10" class="w-full p-1 rounded-md text-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500">
+                                    </div>
+                                    <div>
+                                        <label for="startAngle" class="text-xs text-gray-500 dark:text-gray-400">方向 (°)</label>
+                                        <input type="number" id="startAngle" value="0" class="w-full p-1 rounded-md text-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label class="font-medium">终点速度 (vₘ)</label>
+                                <div class="grid grid-cols-2 gap-2 mt-1">
+                                    <div>
+                                        <label for="endSpeed" class="text-xs text-gray-500 dark:text-gray-400">速度大小</label>
+                                        <input type="number" id="endSpeed" value="10" class="w-full p-1 rounded-md text-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500">
+                                    </div>
+                                    <div>
+                                        <label for="endAngle" class="text-xs text-gray-500 dark:text-gray-400">方向 (°)</label>
+                                        <input type="number" id="endAngle" value="0" class="w-full p-1 rounded-md text-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label class="font-medium">起点加速度 (a₀)</label>
+                                <div class="flex gap-2">
+                                    <input type="number" id="startAccX" value="0" class="w-full p-1 rounded-md text-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500">
+                                    <input type="number" id="startAccY" value="0" class="w-full p-1 rounded-md text-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500">
+                                </div>
+                            </div>
+                             <div class="input-group">
+                                <label class="font-medium">终点加速度 (aₘ)</label>
+                                <div class="flex gap-2">
+                                    <input type="number" id="endAccX" value="0" class="w-full p-1 rounded-md text-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500">
+                                    <input type="number" id="endAccY" value="0" class="w-full p-1 rounded-md text-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Physical Limits -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-3 border-b-2 border-red-500 pb-2">物理限制</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="maxVel" class="block text-sm font-medium">最大速度</label>
+                                <input type="number" id="maxVel" value="20" min="1" class="mt-1 block w-full bg-white dark:bg-gray-600 border rounded-md shadow-sm py-2 px-3">
+                            </div>
+                            <div>
+                                <label for="maxAcc" class="block text-sm font-medium">最大加速度</label>
+                                <input type="number" id="maxAcc" value="10" min="1" class="mt-1 block w-full bg-white dark:bg-gray-600 border rounded-md shadow-sm py-2 px-3">
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <label for="minTurningRadius" class="block text-sm font-medium">最小转弯半径</label>
+                            <input type="number" id="minTurningRadius" value="15" min="1" class="mt-1 block w-full bg-white dark:bg-gray-600 border rounded-md shadow-sm py-2 px-3">
+                        </div>
+                        <div class="mt-4">
+                             <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" id="autoReallocateTime" class="h-5 w-5 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300">
+                                <span class="text-sm font-medium">自动调整时间以满足约束</span>
+                            </label>
+                        </div>
+                         <div id="feasibilityStatus" class="mt-3 text-center font-semibold p-2 rounded-md"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualization -->
+            <div class="lg:col-span-3 space-y-4">
+                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl shadow-lg h-[400px] lg:h-[450px]">
+                    <canvas id="trajectoryCanvas"></canvas>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl shadow-lg chart-container">
+                        <canvas id="velocityCanvas"></canvas>
+                    </div>
+                    <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl shadow-lg chart-container">
+                        <canvas id="accelerationCanvas"></canvas>
+                    </div>
+                    <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-xl shadow-lg chart-container">
+                        <canvas id="turningRadiusCanvas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ---------- C++ Algorithm Port to JavaScript ----------
+        
+        // --- Vector Utilities ---
+        const Vec = (v) => ({ v });
+        const norm = (a) => Math.sqrt(a.v.reduce((sum, val) => sum + val * val, 0));
+        const cwiseAbsMax = (a) => a.v.reduce((max, val) => Math.max(max, Math.abs(val)), 0);
+
+        // --- Linear Algebra Utilities ---
+        function solveLinearSystem(A, b) {
+            const n = A.length;
+            const A_copy = A.map(row => [...row]);
+            const b_copy = [...b];
+
+            for (let i = 0; i < n; i++) {
+                let maxRow = i;
+                for (let k = i + 1; k < n; k++) {
+                    if (Math.abs(A_copy[k][i]) > Math.abs(A_copy[maxRow][i])) {
+                        maxRow = k;
+                    }
+                }
+                [A_copy[i], A_copy[maxRow]] = [A_copy[maxRow], A_copy[i]];
+                [b_copy[i], b_copy[maxRow]] = [b_copy[maxRow], b_copy[i]];
+
+                for (let k = i + 1; k < n; k++) {
+                    const c = A_copy[k][i] / A_copy[i][i];
+                    for (let j = i; j < n; j++) {
+                        A_copy[k][j] -= c * A_copy[i][j];
+                    }
+                    b_copy[k] -= c * b_copy[i];
+                }
+            }
+
+            const x = Array(n).fill(0);
+            for (let i = n - 1; i > -1; i--) {
+                let sum = 0;
+                for (let j = i + 1; j < n; j++) {
+                    sum += A_copy[i][j] * x[j];
+                }
+                x[i] = (b_copy[i] - sum) / A_copy[i][i];
+            }
+            return x;
+        }
+
+        // --- B-spline Class (based on non_uniform_bspline.cpp)---
+        class Bspline {
+            constructor(points, order, interval) {
+                this.p = order;
+                this.interval = interval;
+                this.control_points = points;
+                this.n = points.length - 1;
+                this.m = this.n + this.p + 1;
+                this.limit_ratio = 1.1;
+                this.setUniformKnots();
+            }
+            
+            setUniformKnots() {
+                this.u = Array(this.m + 1).fill(0);
+                for (let i = 0; i <= this.m; ++i) {
+                     this.u[i] = (i - this.p) * this.interval;
+                }
+            }
+
+            getTimeSpan() {
+                return { start: this.u[this.p], end: this.u[this.m - this.p] };
+            }
+
+            evaluateDeBoor(t) {
+                const {start, end} = this.getTimeSpan();
+                const t_b = Math.min(Math.max(start, t), end);
+                
+                let k = this.p;
+                while (k < this.m) {
+                    if(this.u.length <= k + 1) break;
+                    if (t_b < this.u[k+1]) break; // Use < instead of >= to handle the last segment correctly
+                    k++;
+                }
+                if (k > this.n) k = this.n; // FIX: Cap k to the maximum control point index
+                
+                let d = [];
+                for (let i = 0; i <= this.p; ++i) {
+                    d.push(this.control_points[k - this.p + i].v);
+                }
+
+                for (let r = 1; r <= this.p; ++r) {
+                    for (let i = this.p; i >= r; --i) {
+                        const denominator = this.u[i + 1 + k - r] - this.u[i + k - this.p];
+                        const alpha = denominator < 1e-9 ? 0 : (t_b - this.u[i + k - this.p]) / denominator;
+                        d[i] = d[i - 1].map((val, j) => (1 - alpha) * val + alpha * d[i][j]);
+                    }
+                }
+                return Vec(d[this.p]);
+            }
+
+            getDerivative() {
+                let ctp = [];
+                for (let i = 0; i < this.n; ++i) {
+                    const numerator = this.control_points[i+1].v.map((val,j) => this.p * (val - this.control_points[i].v[j]));
+                    const denominator = this.u[i + this.p + 1] - this.u[i + 1];
+                    ctp.push(Vec(numerator.map(v => denominator < 1e-9 ? 0 : v / denominator)));
+                }
+                const derivative = new Bspline(ctp, this.p - 1, this.interval);
+                derivative.u = this.u.slice(1, -1);
+                return derivative;
+            }
+
+            reallocateTime(limit_vel, limit_acc, show_debug=false) {
+                let feasible = true;
+                const P = this.control_points;
+
+                // Velocity reallocation
+                for (let i = 0; i < P.length - 1; ++i) {
+                    const vel_den = this.u[i + this.p + 1] - this.u[i + 1];
+                    if (vel_den < 1e-9) continue;
+                    const vel = Vec(P[i+1].v.map((val, j) => this.p * (val - P[i].v[j]) / vel_den));
+                    const max_vel_of_seg = cwiseAbsMax(vel);
+
+                    if (max_vel_of_seg > limit_vel) {
+                        feasible = false;
+                        if(show_debug) console.log(`Reallocating for Vel violation at seg ${i}`);
+                        let ratio = max_vel_of_seg / limit_vel;
+                        if (ratio > this.limit_ratio) ratio = this.limit_ratio;
+
+                        const time_ori = this.u[i + this.p + 1] - this.u[i + 1];
+                        const time_new = ratio * time_ori;
+                        const delta_t = time_new - time_ori;
+                        const t_inc = delta_t / this.p;
+
+                        for (let j = i + 2; j <= i + this.p + 1; ++j) {
+                            if(j < this.u.length) this.u[j] += (j - i - 1) * t_inc;
+                        }
+                        for (let j = i + this.p + 2; j < this.u.length; ++j) {
+                            this.u[j] += delta_t;
+                        }
+                    }
+                }
+
+                // Acceleration reallocation
+                for (let i = 0; i < P.length - 2; ++i) {
+                    const v1_den = this.u[i + this.p + 2] - this.u[i + 2];
+                    const v0_den = this.u[i + this.p + 1] - this.u[i + 1];
+                    const acc_den = this.u[i + this.p + 1] - this.u[i + 2];
+                    if (Math.abs(v1_den) < 1e-9 || Math.abs(v0_den) < 1e-9 || Math.abs(acc_den) < 1e-9) continue;
+
+                    const v1 = P[i+2].v.map((v,j) => (v - P[i+1].v[j]) / v1_den);
+                    const v0 = P[i+1].v.map((v,j) => (v - P[i].v[j]) / v0_den);
+                    const acc = Vec(v1.map((v,j) => this.p * (this.p-1) * (v - v0[j]) / acc_den));
+                    const max_acc_of_seg = cwiseAbsMax(acc);
+
+                    if (max_acc_of_seg > limit_acc) {
+                        feasible = false;
+                         if(show_debug) console.log(`Reallocating for Acc violation at seg ${i}`);
+                        let ratio = Math.sqrt(max_acc_of_seg / limit_acc);
+                        if (ratio > this.limit_ratio) ratio = this.limit_ratio;
+
+                        const time_ori = this.u[i + this.p + 1] - this.u[i + 2];
+                        const time_new = ratio * time_ori;
+                        const delta_t = time_new - time_ori;
+                        const t_inc = delta_t / (this.p - 1);
+
+                        for (let j = i + 3; j <= i + this.p + 1; ++j) {
+                           if(j < this.u.length) this.u[j] += (j - i - 2) * t_inc;
+                        }
+                        for (let j = i + this.p + 2; j < this.u.length; ++j) {
+                            this.u[j] += delta_t;
+                        }
+                    }
+                }
+                return feasible;
+            }
+        }
+
+        // --- Main Solver (Port of parameterizeToBspline) ---
+        function parameterizeToBspline(ts, point_set, start_end_derivative) {
+            const K = point_set.length;
+            if (K < 2) return [];
+
+            const N = K + 2;
+            const A = Array(K + 4).fill(0).map(() => Array(N).fill(0));
+            
+            const prow = [1, 4, 1];
+            const vrow = [-1, 0, 1];
+            const arow = [1, -2, 1];
+
+            for (let i = 0; i < K; ++i) {
+                for(let j=0; j<3; ++j) { if (i + j < N) A[i][i+j] = prow[j]/6.0; }
+            }
+            
+            for(let j=0; j<3; ++j) { if(j < N) A[K][j] = vrow[j] / (2.0 * ts); }
+            for(let j=0; j<3; ++j) { if(K-1+j < N && K-1+j >=0) A[K+1][K-1+j] = vrow[j] / (2.0 * ts); }
+
+            for(let j=0; j<3; ++j) { if(j < N) A[K+2][j] = arow[j] / (ts * ts); }
+            for(let j=0; j<3; ++j) { if(K-1+j < N && K-1+j >=0) A[K+3][K-1+j] = arow[j] / (ts * ts); }
+            
+            const b_x = Array(K + 4).fill(0), b_y = Array(K + 4).fill(0);
+            for (let i = 0; i < K; ++i) {
+                b_x[i] = point_set[i].v[0];
+                b_y[i] = point_set[i].v[1];
+            }
+            
+            [b_x[K], b_y[K]] = start_end_derivative.start_vel.v;
+            [b_x[K+1], b_y[K+1]] = start_end_derivative.end_vel.v;
+            [b_x[K+2], b_y[K+2]] = start_end_derivative.start_acc.v;
+            [b_x[K+3], b_y[K+3]] = start_end_derivative.end_acc.v;
+            
+            const num_vars = N;
+            if (K+4 < N) {
+                console.error("System is underdetermined. Not enough constraints.");
+                return [];
+            }
+            // Use first N equations to form a square system
+            const A_sq = A.slice(0, num_vars).map(row => row.slice(0, num_vars));
+            const b_x_sq = b_x.slice(0, num_vars);
+            const b_y_sq = b_y.slice(0, num_vars);
+            
+            const ctrl_pts_x = solveLinearSystem(A_sq, b_x_sq);
+            const ctrl_pts_y = solveLinearSystem(A_sq, b_y_sq);
+            
+            const ctrl_pts = [];
+            for(let i=0; i<N; ++i) {
+                ctrl_pts.push(Vec([ctrl_pts_x[i], ctrl_pts_y[i]]));
+            }
+            return ctrl_pts;
+        }
+
+        // ---------- UI and Visualization Logic ----------
+        const trajectoryCanvas = document.getElementById('trajectoryCanvas');
+        const velocityCanvas = document.getElementById('velocityCanvas');
+        const accelerationCanvas = document.getElementById('accelerationCanvas');
+        const turningRadiusCanvas = document.getElementById('turningRadiusCanvas');
+        const waypointListEl = document.getElementById('waypointList');
+        const addWaypointBtn = document.getElementById('addWaypointBtn');
+        const randomWaypointsBtn = document.getElementById('randomWaypointsBtn');
+        const allInputs = document.querySelectorAll('input');
+        const feasibilityStatusEl = document.getElementById('feasibilityStatus');
+        const autoReallocateCheck = document.getElementById('autoReallocateTime');
+
+        let waypoints = [];
+        let trajectoryChart, velocityChart, accelerationChart, turningRadiusChart;
+
+        function renderWaypointList() {
+            waypointListEl.innerHTML = waypoints.map((wp, index) => `
+                <div class="waypoint-item flex items-center gap-2 p-2 bg-white dark:bg-gray-600 rounded-lg shadow">
+                    <span class="font-mono text-sm w-8">W${index}</span>
+                    <input type="number" value="${wp.v[0].toFixed(1)}" onchange="updateWaypoint(${index}, 0, this.value)" class="w-full p-1 rounded-md border-gray-300 dark:border-gray-500 bg-transparent text-center">
+                    <input type="number" value="${wp.v[1].toFixed(1)}" onchange="updateWaypoint(${index}, 1, this.value)" class="w-full p-1 rounded-md border-gray-300 dark:border-gray-500 bg-transparent text-center">
+                    <button onclick="removeWaypoint(${index})" class="text-red-500 hover:text-red-700 font-bold px-2 text-lg">&times;</button>
+                </div>
+            `).join('');
+        }
+        
+        window.updateWaypoint = (index, coord, value) => {
+            waypoints[index].v[coord] = parseFloat(value);
+            run();
+        };
+
+        window.removeWaypoint = (index) => {
+            if (waypoints.length > 2) {
+                waypoints.splice(index, 1);
+                renderWaypointList();
+                run();
+            } else {
+                alert("至少需要2个航路点。");
+            }
+        };
+
+        addWaypointBtn.addEventListener('click', () => {
+            const lastWp = waypoints[waypoints.length - 1].v;
+            waypoints.push(Vec([lastWp[0] + 50, lastWp[1] + (Math.random() - 0.5) * 40]));
+            renderWaypointList();
+            run();
+        });
+
+        randomWaypointsBtn.addEventListener('click', () => {
+            const numPoints = 6;
+            waypoints = [];
+            let currentX = 50;
+            for (let i = 0; i < numPoints; i++) {
+                const y = (i == 0 || i == numPoints - 1) ? 0 : (Math.random() - 0.5) * 80;
+                waypoints.push(Vec([currentX, y]));
+                currentX += 80 + Math.random()*20;
+            }
+            renderWaypointList();
+            run();
+        });
+
+        function setupCharts() {
+            const commonOptions = () => ({
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 500 },
+                scales: { 
+                    x: { grid: { color: 'rgba(128,128,128,0.2)' } }, 
+                    y: { beginAtZero: false, grid: { color: 'rgba(128,128,128,0.2)' } } 
+                },
+                plugins: { legend: { display: true, position: 'top' } }
+            });
+             const timeSeriesOptions = (yAxisLabel) => ({
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 500 },
+                scales: {
+                    x:{ 
+                        type: 'linear', // Explicitly set the x-axis to linear scale
+                        title:{ display:true, text:'时间 (s)'}, 
+                        grid: { color: 'rgba(128,128,128,0.2)' } 
+                    }, 
+                    y:{ 
+                        beginAtZero: true, 
+                        title:{display:true, text: yAxisLabel}, 
+                        grid: { color: 'rgba(128,128,128,0.2)' } 
+                    }
+                }
+            });
+            trajectoryChart = new Chart(trajectoryCanvas.getContext('2d'), { type: 'scatter', options: commonOptions() });
+            velocityChart = new Chart(velocityCanvas.getContext('2d'), { type: 'line', options: timeSeriesOptions('速度模 (m/s)') });
+            accelerationChart = new Chart(accelerationCanvas.getContext('2d'), { type: 'line', options: timeSeriesOptions('加速度模 (m/s²)') });
+            turningRadiusChart = new Chart(turningRadiusCanvas.getContext('2d'), { type: 'line', options: timeSeriesOptions('转弯半径 (m)') });
+        }
+        
+        function run() {
+            if (waypoints.length < 2) return;
+
+            const ts = parseFloat(document.getElementById('timeStep').value);
+            
+            const startSpeed = parseFloat(document.getElementById('startSpeed').value);
+            const startAngleRad = parseFloat(document.getElementById('startAngle').value) * Math.PI / 180;
+            const endSpeed = parseFloat(document.getElementById('endSpeed').value);
+            const endAngleRad = parseFloat(document.getElementById('endAngle').value) * Math.PI / 180;
+
+            const derivatives = {
+                start_vel: Vec([startSpeed * Math.cos(startAngleRad), startSpeed * Math.sin(startAngleRad)]),
+                end_vel:   Vec([endSpeed * Math.cos(endAngleRad), endSpeed * Math.sin(endAngleRad)]),
+                start_acc: Vec([parseFloat(document.getElementById('startAccX').value), parseFloat(document.getElementById('startAccY').value)]),
+                end_acc:   Vec([parseFloat(document.getElementById('endAccX').value), parseFloat(document.getElementById('endAccY').value)])
+            };
+            
+            const max_vel_limit = parseFloat(document.getElementById('maxVel').value);
+            const max_acc_limit = parseFloat(document.getElementById('maxAcc').value);
+            const min_radius_limit = parseFloat(document.getElementById('minTurningRadius').value);
+
+            const control_points = parameterizeToBspline(ts, waypoints, derivatives);
+            if (!control_points || control_points.length === 0) return;
+
+            const spline = new Bspline(control_points, 3, ts);
+            
+            // --- Auto Reallocate Time ---
+            if (autoReallocateCheck.checked) {
+                for(let i=0; i<10; i++){
+                    const is_feasible = spline.reallocateTime(max_vel_limit, max_acc_limit);
+                    if(is_feasible) {
+                        console.log(`Feasible after ${i+1} reallocation(s).`);
+                        break;
+                    }
+                }
+            }
+            
+            // --- Sampling and Analysis ---
+            const vel_spline = spline.getDerivative();
+            const acc_spline = vel_spline.getDerivative();
+            const {start, end} = spline.getTimeSpan();
+            const samples = [], vel_samples = [], acc_samples = [], turning_radius_samples = [];
+            let max_vel_actual = 0, max_acc_actual = 0, min_radius_actual = Infinity;
+            const num_samples = 200;
+            const RADIUS_CAP = 500; // Cap turning radius for display purposes
+
+            for(let i=0; i<=num_samples; i++){
+                const t = start + (end-start) * i / num_samples;
+                if (isNaN(t)) continue;
+                const pos = spline.evaluateDeBoor(t);
+                const vel = vel_spline.evaluateDeBoor(t);
+                const acc = acc_spline.evaluateDeBoor(t);
+                const vel_norm = norm(vel);
+                const acc_norm = norm(acc);
+
+                // Curvature and Turning Radius calculation
+                const curvature_numerator = Math.abs(vel.v[0] * acc.v[1] - vel.v[1] * acc.v[0]);
+                const curvature_denominator = Math.pow(vel_norm, 3);
+                const curvature = (curvature_denominator < 1e-9) ? 0 : curvature_numerator / curvature_denominator;
+                const rawTurningRadius = (curvature < 1e-6) ? Infinity : 1 / curvature;
+                const turningRadiusForDisplay = Math.min(RADIUS_CAP, rawTurningRadius);
+                
+                samples.push({x: pos.v[0], y: pos.v[1]});
+                vel_samples.push({x: t, y: vel_norm});
+                acc_samples.push({x: t, y: acc_norm});
+                turning_radius_samples.push({x:t, y: turningRadiusForDisplay});
+
+                if(vel_norm > max_vel_actual) max_vel_actual = vel_norm;
+                if(acc_norm > max_acc_actual) max_acc_actual = acc_norm;
+                if(rawTurningRadius < min_radius_actual) min_radius_actual = rawTurningRadius;
+            }
+
+            // --- Update Feasibility Status ---
+            const vel_ok = max_vel_actual <= max_vel_limit;
+            const acc_ok = max_acc_actual <= max_acc_limit;
+            const radius_ok = min_radius_actual >= min_radius_limit;
+
+            if (vel_ok && acc_ok && radius_ok) {
+                feasibilityStatusEl.textContent = '✅ 可行';
+                feasibilityStatusEl.className = 'mt-3 text-center font-semibold p-2 rounded-md bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100';
+            } else {
+                let errorMessages = [];
+                if (!vel_ok) errorMessages.push(`Vₘₐₓ: ${max_vel_actual.toFixed(2)}`);
+                if (!acc_ok) errorMessages.push(`Aₘₐₓ: ${max_acc_actual.toFixed(2)}`);
+                if (!radius_ok) errorMessages.push(`Rₘᵢₙ: ${min_radius_actual.toFixed(2)}`);
+                
+                feasibilityStatusEl.textContent = `❌ 不可行 (${errorMessages.join(', ')})`;
+                feasibilityStatusEl.className = 'mt-3 text-center font-semibold p-2 rounded-md bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100';
+            }
+            
+            // --- Update Charts ---
+            trajectoryChart.data.datasets = [
+                { label: 'Waypoints', data: waypoints.map(w => ({ x: w.v[0], y: w.v[1] })), backgroundColor: 'rgba(239, 68, 68, 1)', pointRadius: 6, type: 'scatter' },
+                { label: 'Control Polygon', data: control_points.map(d => ({ x: d.v[0], y: d.v[1] })), borderColor: 'rgba(34, 197, 94, 0.5)', borderWidth: 1, showLine: true, pointRadius: 4, pointBackgroundColor: 'rgba(34, 197, 94, 1)', type: 'line' },
+                { label: 'B-spline', data: samples, borderColor: 'rgba(99, 102, 241, 1)', borderWidth: 3, showLine: true, pointRadius: 0, tension: 0.1, type: 'line' }
+            ];
+            trajectoryChart.update();
+
+            velocityChart.data.datasets = [
+                { label: '速度模', data: vel_samples, borderColor: 'rgba(59, 130, 246, 1)', borderWidth: 2, fill:false, pointRadius: 0 },
+                { label: '最大速度限制', data: vel_samples.map(s=>({x: s.x, y: max_vel_limit})), borderColor: 'rgba(239, 68, 68, 0.7)', borderWidth: 2, borderDash: [5,5], fill:false, pointRadius: 0 }
+            ];
+            velocityChart.update();
+
+            accelerationChart.data.datasets = [
+                 { label: '加速度模', data: acc_samples, borderColor: 'rgba(249, 115, 22, 1)', borderWidth: 2, fill:false, pointRadius: 0 },
+                 { label: '最大加速度限制', data: acc_samples.map(s=>({x: s.x, y: max_acc_limit})), borderColor: 'rgba(239, 68, 68, 0.7)', borderWidth: 2, borderDash: [5,5], fill:false, pointRadius: 0 }
+            ];
+            accelerationChart.update();
+            
+            turningRadiusChart.data.datasets = [
+                 { label: '转弯半径', data: turning_radius_samples, borderColor: 'rgba(139, 92, 246, 1)', borderWidth: 2, fill:false, pointRadius: 0 },
+                 { label: '最小半径限制', data: turning_radius_samples.map(s=>({x: s.x, y: min_radius_limit})), borderColor: 'rgba(239, 68, 68, 0.7)', borderWidth: 2, borderDash: [5,5], fill:false, pointRadius: 0 }
+            ];
+            turningRadiusChart.update();
+        }
+
+        allInputs.forEach(el => el.addEventListener('change', run));
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', () => {
+            setupCharts();
+            randomWaypointsBtn.click();
+        });
+    </script>
+</body>
+</html>
